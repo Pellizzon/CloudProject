@@ -8,7 +8,7 @@ class KeyPair():
 
     def create(self):
         key_pair = ec2.create_key_pair(KeyName=self.keyName)
-        with open(f'{key_pair}.pem', 'w') as pk_file:
+        with open(f'{self.keyName}.pem', 'w') as pk_file:
                 pk_file.write(key_pair.key_material)
 
     def delete(self):
@@ -21,7 +21,6 @@ class InstanceManager():
         self.keyName = keyName
         self.instanceId = []
         self.securityGroupName = securityGroupName
-        self.securityGroupId = None
 
     def createInstances(self, amount):
         instance_params = {
@@ -63,7 +62,7 @@ class InstanceManager():
         ]) 
     
     def deleteSecurityGroup(self):
-        ec2_client.delete_security_group(GroupName=self.securityGroupName)
+        print(ec2_client.delete_security_group(GroupName=self.securityGroupName))
 
 if __name__ == '__main__':
 
@@ -96,17 +95,17 @@ if __name__ == '__main__':
 
     instanceManager = InstanceManager('ami-0dba2cb6798deb6d8', 't2.micro', key.keyName, 'grupoTeste')
 
-    try:
-        instanceManager.deleteSecurityGroup()
-    except:
-        print("Security Group doesn't exist")
+    instanceManager.terminateInstances(key.keyName)
+
+    # try:
+    #     instanceManager.deleteSecurityGroup()
+    # except:
+    #     print("Security Group doesn't exist")
 
     try:
         instanceManager.createSecurityGroup()
     except:
-        print('error')
-
-    instanceManager.terminateInstances(key.keyName)
+        print('Security Group already exists')
 
     instanceManager.createInstances(3)
 
