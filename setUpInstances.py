@@ -127,10 +127,35 @@ if __name__ == "__main__":
     except:
         print("Security Group already exists")
 
-    instanceManager.createInstances(3)
+    instanceManager.createInstances(2)
 
-    # lb_client = boto3.client('elbv2',
-    #     aws_access_key_id=os.getenv('ACCESS_KEY'),
-    #     aws_secret_access_key=os.getenv('SECRET_KEY'),
-    #     region_name='us-east-1'
-    # )
+    subnets = ec2_client.describe_subnets()["Subnets"]
+    default_subnets_IDs = []
+    # caso precise desse id... Todas as subnets possuem o vpc default
+    vpc_id = subnets[0]["VpcId"]
+    for i in range(len(subnets)):
+        default_subnets_IDs.append(subnets[i]["SubnetId"])
+
+    lb_client = boto3.client(
+        "elbv2",
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+        region_name="us-east-1",
+    )
+
+    lb_name = "pell-lb"
+    active_lbs = lb_client.describe_load_balancers()["LoadBalancers"]
+    for i in range(len(active_lbs)):
+        if active_lbs[i]["LoadBalancerName"] == lb_name:
+            my_lb_arn = active_lbs[i]["LoadBalancerArn"]
+
+    try:
+        lb_client.delete_load_balancer(LoadBalancerArn=my_lb_arn)
+    except:
+        print("Erro ao deletar loadBalancer")
+
+    lb_client.create_load_balancer(
+        Name=lb_name,
+        Subnets=default_subnets_IDs,
+        Tags=[{"Key": "name", "Value": "pell-lb"}],
+    )
