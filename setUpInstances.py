@@ -3,82 +3,29 @@ from dotenv import load_dotenv
 import os
 
 
-class KeyPair:
-    def __init__(self, keyName):
-        self.keyName = keyName
+def create_instances(imageId, instanceType, keyName, securityGroupName, amount):
+    instance_params = {
+        "ImageId": imageId,
+        "InstanceType": instanceType,
+        "KeyName": keyName,
+        "SecurityGroups": [securityGroupName],
+    }
+    instances = ec2.create_instances(**instance_params, MinCount=1, MaxCount=amount)
+    instancesIds = []
+    for i in instances:
+        instancesIds.append(i.id)
 
-    def create(self):
-        key_pair = ec2.create_key_pair(KeyName=self.keyName)
-        with open(f"{self.keyName}.pem", "w") as pk_file:
-            pk_file.write(key_pair.key_material)
-
-    def delete(self):
-        ec2_client.delete_key_pair(KeyName=self.keyName)
+    return instancesIds
 
 
-class InstanceManager:
-    def __init__(self, imageId, instanceType, keyName, securityGroupName):
-        self.imageId = imageId
-        self.instanceType = instanceType
-        self.keyName = keyName
-        self.instanceId = []
-        self.securityGroupName = securityGroupName
+def terminate_instances(keyName):
+    instances = ec2.instances.filter(
+        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
+    )
 
-    def createInstances(self, amount):
-        instance_params = {
-            "ImageId": self.imageId,
-            "InstanceType": self.instanceType,
-            "KeyName": self.keyName,
-            "SecurityGroups": [self.securityGroupName],
-        }
-        instances = ec2.create_instances(**instance_params, MinCount=1, MaxCount=amount)
-        for i in instances:
-            self.instanceId.append(i.id)
-
-    def terminateInstances(self, keyName, wait=False):
-        instances = ec2.instances.filter(
-            Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
-        )
-
-        to_delete = []
-        for i in instances:
-            if i.key_name == keyName:
-                ec2.Instance(i.id).terminate()
-                to_delete.append(i.id)
-
-        if wait:
-            for i in to_delete:
-                ec2.Instance(i).wait_until_terminated()
-
-    def waitUntilRunning(self):
-        for i in self.instanceId:
-            ec2.Instance(i).wait_until_running()
-
-    def createSecurityGroup(self):
-        response = ec2_client.create_security_group(
-            GroupName=self.securityGroupName, Description="Teste"
-        )
-        security_group_id = response["GroupId"]
-        ec2_client.authorize_security_group_ingress(
-            GroupId=security_group_id,
-            IpPermissions=[
-                {
-                    "IpProtocol": "tcp",
-                    "FromPort": 8080,
-                    "ToPort": 8080,
-                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                },
-                {
-                    "IpProtocol": "tcp",
-                    "FromPort": 22,
-                    "ToPort": 22,
-                    "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                },
-            ],
-        )
-
-    def deleteSecurityGroup(self):
-        print(ec2_client.delete_security_group(GroupName=self.securityGroupName))
+    for i in instances:
+        if i.key_name == keyName:
+            ec2.Instance(i.id).terminate()
 
 
 if __name__ == "__main__":
@@ -99,35 +46,44 @@ if __name__ == "__main__":
         region_name="us-east-1",
     )
 
-    key = KeyPair("teste")
+    keyName = "teste"
+    securityGroupName = "grupoTeste"
+    ImageId = "ami-0dba2cb6798deb6d8"
+    InstanceType = "t2.micro"
 
+    # delete keypair
     try:
-        key.delete()
-    except:
-        print("Key doesn't exist")
-
-    try:
-        key.create()
+        ec2_client.delete_key_pair(KeyName=keyName)
     except:
         print("Key already exists")
 
-    instanceManager = InstanceManager(
-        "ami-0dba2cb6798deb6d8", "t2.micro", key.keyName, "grupoTeste"
-    )
-
-    instanceManager.terminateInstances(key.keyName, wait=False)
-
-    # try:
-    #     instanceManager.deleteSecurityGroup()
-    # except:
-    #     print("Security Group doesn't exist")
-
+    # create keypair
     try:
-        instanceManager.createSecurityGroup()
+        key_pair = ec2.create_key_pair(KeyName=keyName)
+        with open(f"{keyName}.pem", "w") as pk_file:
+            pk_file.write(key_pair.key_material)
+    except:
+        print("Key doesn't exist")
+
+    # delete existing instances
+    try:
+        terminate_instances(keyName)
+    except:
+        print("Error deleting instances")
+
+    # then delete security group (can only be done once all instances associated with it are terminated)
+    # try:
+    #     ec2_client.delete_security_group(GroupName=securityGroupName)
+    # except:
+    #     print("Security Group deletion error exist")
+
+    # create security group to add to instances
+    try:
+        instancesIds = create_instances(
+            ImageId, InstanceType, keyName, securityGroupName, 2
+        )
     except:
         print("Security Group already exists")
-
-    instanceManager.createInstances(2)
 
     subnets = ec2_client.describe_subnets()["Subnets"]
     default_subnets_IDs = []
