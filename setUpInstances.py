@@ -3,14 +3,40 @@ from dotenv import load_dotenv
 import os
 
 
-def create_instances(imageId, instanceType, keyName, securityGroupName, amount):
+def create_security_group(client, securityGroupName):
+    response = client.create_security_group(
+        GroupName=securityGroupName, Description="Teste"
+    )
+    security_group_id = response["GroupId"]
+    client.authorize_security_group_ingress(
+        GroupId=security_group_id,
+        IpPermissions=[
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 8080,
+                "ToPort": 8080,
+                "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+            },
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+            },
+        ],
+    )
+
+
+def create_instances(
+    imageId, instanceType, keyName, securityGroupName, amount, session
+):
     instance_params = {
         "ImageId": imageId,
         "InstanceType": instanceType,
         "KeyName": keyName,
         "SecurityGroups": [securityGroupName],
     }
-    instances = ec2.create_instances(**instance_params, MinCount=1, MaxCount=amount)
+    instances = session.create_instances(**instance_params, MinCount=1, MaxCount=amount)
     instancesIds = []
     for i in instances:
         instancesIds.append(i.id)
@@ -18,86 +44,157 @@ def create_instances(imageId, instanceType, keyName, securityGroupName, amount):
     return instancesIds
 
 
-def terminate_instances(keyName):
-    instances = ec2.instances.filter(
+def terminate_instances(keyName, session):
+    instances = session.instances.filter(
         Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
     )
 
     for i in instances:
         if i.key_name == keyName:
-            ec2.Instance(i.id).terminate()
+            session.Instance(i.id).terminate()
 
 
-if __name__ == "__main__":
+def main_region2(securityGroupName, InstanceType):
+    keyName_region2 = "teste2"
+    region2 = "us-east-2"
+    ImageId_region2 = "ami-07efac79022b86107"
 
-    load_dotenv(verbose=True)
-
-    session = boto3.Session(
+    session_region2 = boto3.Session(
         aws_access_key_id=os.getenv("ACCESS_KEY"),
         aws_secret_access_key=os.getenv("SECRET_KEY"),
     )
 
-    ec2 = session.resource("ec2", region_name="us-east-1")
+    ec2_region2 = session_region2.resource("ec2", region_name=region2)
 
-    ec2_client = boto3.client(
+    ec2_client_region2 = boto3.client(
         "ec2",
         aws_access_key_id=os.getenv("ACCESS_KEY"),
         aws_secret_access_key=os.getenv("SECRET_KEY"),
-        region_name="us-east-1",
+        region_name=region2,
     )
-
-    keyName = "teste"
-    securityGroupName = "grupoTeste"
-    ImageId = "ami-0dba2cb6798deb6d8"
-    InstanceType = "t2.micro"
 
     # delete keypair
     try:
-        ec2_client.delete_key_pair(KeyName=keyName)
+        ec2_client_region2.delete_key_pair(KeyName=keyName_region2)
     except:
         print("Key already exists")
 
     # create keypair
     try:
-        key_pair = ec2.create_key_pair(KeyName=keyName)
-        with open(f"{keyName}.pem", "w") as pk_file:
+        key_pair = ec2_region2.create_key_pair(KeyName=keyName_region2)
+        with open(f"{keyName_region2}.pem", "w") as pk_file:
             pk_file.write(key_pair.key_material)
     except:
         print("Key doesn't exist")
 
     # delete existing instances
     try:
-        terminate_instances(keyName)
+        terminate_instances(keyName_region2, ec2_region2)
     except:
         print("Error deleting instances")
 
     # then delete security group (can only be done once all instances associated with it are terminated)
     # try:
-    #     ec2_client.delete_security_group(GroupName=securityGroupName)
+    #     ec2_client_region1.delete_security_group(GroupName=securityGroupName)
     # except:
     #     print("Security Group deletion error exist")
+
+    try:
+        create_security_group(ec2_client_region2, securityGroupName)
+    except:
+        print("Security Group already exists")
 
     # create security group to add to instances
     try:
         instancesIds = create_instances(
-            ImageId, InstanceType, keyName, securityGroupName, 2
+            ImageId_region2,
+            InstanceType,
+            keyName_region2,
+            securityGroupName,
+            1,
+            ec2_region2,
         )
     except:
         print("Security Group already exists")
 
-    subnets = ec2_client.describe_subnets()["Subnets"]
-    default_subnets_IDs = []
-    # caso precise desse id... Todas as subnets possuem o vpc default
-    vpc_id = subnets[0]["VpcId"]
-    for i in range(len(subnets)):
-        default_subnets_IDs.append(subnets[i]["SubnetId"])
+
+def main_region1(securityGroupName, InstanceType):
+    region1 = "us-east-1"
+    keyName_region1 = "teste"
+    ImageId_region1 = "ami-0dba2cb6798deb6d8"
+
+    session_region1 = boto3.Session(
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+    )
+
+    ec2_region1 = session_region1.resource("ec2", region_name=region1)
+
+    ec2_client_region1 = boto3.client(
+        "ec2",
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+        region_name=region1,
+    )
 
     lb_client = boto3.client(
         "elbv2",
         aws_access_key_id=os.getenv("ACCESS_KEY"),
         aws_secret_access_key=os.getenv("SECRET_KEY"),
-        region_name="us-east-1",
+        region_name=region1,
     )
+
+    # delete keypair
+    try:
+        ec2_client_region1.delete_key_pair(KeyName=keyName_region1)
+    except:
+        print("Key already exists")
+
+    # create keypair
+    try:
+        key_pair = ec2_region1.create_key_pair(KeyName=keyName_region1)
+        with open(f"{keyName_region1}.pem", "w") as pk_file:
+            pk_file.write(key_pair.key_material)
+    except:
+        print("Key doesn't exist")
+
+    # delete existing instances
+    try:
+        terminate_instances(keyName_region1, ec2_region1)
+    except:
+        print("Error deleting instances")
+
+    # then delete security group (can only be done once all instances associated with it are terminated)
+    # try:
+    #     ec2_client_region1.delete_security_group(GroupName=securityGroupName)
+    # except:
+    #     print("Security Group deletion error exist")
+
+    # create security group to add to instances
+    try:
+        create_security_group(ec2_client_region1, securityGroupName)
+    except:
+        print("Security Group already exists")
+
+    # create instances
+    try:
+        instancesIds = create_instances(
+            ImageId_region1,
+            InstanceType,
+            keyName_region1,
+            securityGroupName,
+            2,
+            ec2_region1,
+        )
+    except:
+        print("Security Group already exists")
+
+    subnets = ec2_client_region1.describe_subnets()["Subnets"]
+    default_subnets_IDs = []
+    # caso precise desse id... Todas as subnets possuem o vpc default
+    vpc_id = subnets[0]["VpcId"]
+    for i in range(len(subnets)):
+        default_subnets_IDs.append(subnets[i]["SubnetId"])
 
     lb_name = "pell-lb"
     active_lbs = lb_client.describe_load_balancers()["LoadBalancers"]
@@ -115,3 +212,26 @@ if __name__ == "__main__":
         Subnets=default_subnets_IDs,
         Tags=[{"Key": "name", "Value": "pell-lb"}],
     )
+
+
+if __name__ == "__main__":
+
+    load_dotenv(verbose=True)
+
+    # comuns para os dois
+    securityGroupName = "grupoTeste"
+    InstanceType = "t2.micro"
+
+    """ 
+        Parte do projeto desenvolvilda na região
+        us-east-2 (Ohio)  
+    """
+
+    main_region2(securityGroupName, InstanceType)
+
+    """ 
+        Parte do projeto desenvolvilda na região
+        us-east-1 (North Virginia)    
+    """
+
+    main_region1(securityGroupName, InstanceType)
