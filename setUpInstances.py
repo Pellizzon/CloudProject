@@ -49,9 +49,18 @@ def terminate_instances(keyName, session):
         Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
     )
 
+    to_terminate = []
     for i in instances:
         if i.key_name == keyName:
-            session.Instance(i.id).terminate()
+            to_terminate.append(i.id)
+
+    # request to terminate instances
+    for j in to_terminate:
+        session.Instance(j).terminate()
+
+    # wait for them to be terminated
+    for m in to_terminate:
+        session.Instance(m).wait_until_terminated()
 
 
 def main_region2(securityGroupName, InstanceType):
@@ -94,10 +103,10 @@ def main_region2(securityGroupName, InstanceType):
         print("Error deleting instances")
 
     # then delete security group (can only be done once all instances associated with it are terminated)
-    # try:
-    #     ec2_client_region1.delete_security_group(GroupName=securityGroupName)
-    # except:
-    #     print("Security Group deletion error exist")
+    try:
+        ec2_client_region2.delete_security_group(GroupName=securityGroupName)
+    except:
+        print("Security Group deletion error exist")
 
     try:
         create_security_group(ec2_client_region2, securityGroupName)
@@ -115,7 +124,7 @@ def main_region2(securityGroupName, InstanceType):
             ec2_region2,
         )
     except:
-        print("Security Group already exists")
+        print("Error creating instances Ohio")
 
 
 def main_region1(securityGroupName, InstanceType):
@@ -165,10 +174,10 @@ def main_region1(securityGroupName, InstanceType):
         print("Error deleting instances")
 
     # then delete security group (can only be done once all instances associated with it are terminated)
-    # try:
-    #     ec2_client_region1.delete_security_group(GroupName=securityGroupName)
-    # except:
-    #     print("Security Group deletion error exist")
+    try:
+        ec2_client_region1.delete_security_group(GroupName=securityGroupName)
+    except:
+        print("Security Group deletion error exist")
 
     # create security group to add to instances
     try:
@@ -187,7 +196,7 @@ def main_region1(securityGroupName, InstanceType):
             ec2_region1,
         )
     except:
-        print("Security Group already exists")
+        print("Error creating instances N Virginia")
 
     subnets = ec2_client_region1.describe_subnets()["Subnets"]
     default_subnets_IDs = []
@@ -223,14 +232,14 @@ if __name__ == "__main__":
     InstanceType = "t2.micro"
 
     """ 
-        Parte do projeto desenvolvilda na região
+        Parte do projeto desenvolvida na região
         us-east-2 (Ohio)  
     """
 
     main_region2(securityGroupName, InstanceType)
 
     """ 
-        Parte do projeto desenvolvilda na região
+        Parte do projeto desenvolvida na região
         us-east-1 (North Virginia)    
     """
 
