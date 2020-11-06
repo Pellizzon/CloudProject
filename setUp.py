@@ -1,6 +1,7 @@
 import boto3
 from dotenv import load_dotenv
 import os
+import time
 
 # https://stackoverflow.com/questions/287871/how-to-print-colored-text-in-python
 class bcolors:
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     sh ./tasks/install.sh"""
 
     # create instance
-    instances_r1 = create_instances(
+    instancesRegion1 = create_instances(
         appParams,
         1,
         ec2Region1,
@@ -293,48 +294,98 @@ if __name__ == "__main__":
         f"{bcolors.UNDERLINE}{bcolors.HEADER}Finished initial setup. Starting AutoScaling Group and LoadBalancer{bcolors.ENDC}{bcolors.ENDC}"
     )
 
-    # asClient = boto3.client(
-    #     "autoscaling",
-    #     aws_access_key_id=os.getenv("ACCESS_KEY"),
-    #     aws_secret_access_key=os.getenv("SECRET_KEY"),
-    #     region_name=region1,
-    # )
+    lbClient = boto3.client(
+        "elbv2",
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+        region_name=region1,
+    )
 
-    # asGroupName = "AutoScalingORM"
-    # asClient.create_auto_scaling_group(
-    #     AutoScalingGroupName=asGroupName,
-    #     MinSize=1,
-    #     MaxSize=5,
-    #     DesiredCapacity=1,
-    # )
+    subnets = ec2ClientRegion1.describe_subnets()["Subnets"]
+    default_subnets_IDs = []
+    # caso precise desse id... Todas as subnets possuem o vpc default
+    vpcId = subnets[0]["VpcId"]
+    for i in range(len(subnets)):
+        default_subnets_IDs.append(subnets[i]["SubnetId"])
 
-    # lbClient = boto3.client(
-    #     "elbv2",
-    #     aws_access_key_id=os.getenv("ACCESS_KEY"),
-    #     aws_secret_access_key=os.getenv("SECRET_KEY"),
-    #     region_name=region1,
-    # )
+    lb_name = "pell-lb"
+    try:
+        active_lbs = lbClient.describe_load_balancers()["LoadBalancers"]
+        for i in range(len(active_lbs)):
+            if active_lbs[i]["LoadBalancerName"] == lb_name:
+                my_lb_arn = active_lbs[i]["LoadBalancerArn"]
+                lbClient.delete_load_balancer(LoadBalancerArn=my_lb_arn)
+                lbWaiter = lbClient.get_waiter("load_balancers_deleted")
+                lbWaiter.wait(Names=[lb_name])
+    except:
+        print(f"{bcolors.FAIL}Couldn't find load balancer{bcolors.ENDC}")
 
-    # subnets = ec2ClientRegion1.describe_subnets()["Subnets"]
-    # default_subnets_IDs = []
-    # # caso precise desse id... Todas as subnets possuem o vpc default
-    # vpc_id = subnets[0]["VpcId"]
-    # for i in range(len(subnets)):
-    #     default_subnets_IDs.append(subnets[i]["SubnetId"])
+    try:
+        active_targetGroups = lbClient.describe_target_groups(Names=[lb_name])[
+            "TargetGroups"
+        ]
+        tgArn_toDelete = active_targetGroups[0]["TargetGroupArn"]
+        lbClient.delete_target_group(TargetGroupArn=tgArn_toDelete)
+    except:
+        print(f"{bcolors.FAIL}Deu ruim{bcolors.ENDC}")
 
-    # lb_name = "pell-lb"
-    # active_lbs = lbClient.describe_load_balancers()["LoadBalancers"]
-    # for i in range(len(active_lbs)):
-    #     if active_lbs[i]["LoadBalancerName"] == lb_name:
-    #         my_lb_arn = active_lbs[i]["LoadBalancerArn"]
+    loadBalancer = lbClient.create_load_balancer(
+        Name=lb_name,
+        Subnets=default_subnets_IDs,
+        Tags=[{"Key": "name", "Value": "pell-lb"}],
+    )
 
-    # try:
-    #     lbClient.delete_load_balancer(LoadBalancerArn=my_lb_arn)
-    # except:
-    #     print("Erro ao deletar loadBalancer")
+    lbArn = loadBalancer.get("LoadBalancers", [{}])[0].get("LoadBalancerArn", None)
 
-    # lbClient.create_load_balancer(
-    #     Name=lb_name,
-    #     Subnets=default_subnets_IDs,
-    #     Tags=[{"Key": "name", "Value": "pell-lb"}],
-    # )
+    targetGroup = lbClient.create_target_group(
+        Name=lb_name, Protocol="HTTP", Port=8080, VpcId=vpcId
+    )
+
+    targetGroupArn = targetGroup.get("TargetGroups", [{}])[0].get(
+        "TargetGroupArn", None
+    )
+
+    listener = lbClient.create_listener(
+        DefaultActions=[{"TargetGroupArn": targetGroupArn, "Type": "forward"}],
+        LoadBalancerArn=lbArn,
+        Port=8080,
+        Protocol="HTTP",
+    )
+
+    ASGClient = boto3.client(
+        "autoscaling",
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+        region_name=region1,
+    )
+
+    ASGName = "AutoScalingORM"
+
+    try:
+        ASGClient.delete_auto_scaling_group(
+            AutoScalingGroupName=ASGName, ForceDelete=True
+        )
+        print(f"{bcolors.OKGREEN}AutoScaling Group deleted{bcolors.ENDC}")
+        # there are no currently available ASG waiters. So in order to create an ASG with the same name,
+        # it is necessary to wait the deletion of the older one. Testing for a while, this should work for now.
+        time.sleep(120)
+    except:
+        print(f"{bcolors.FAIL}AutoScaling Group deletion failed{bcolors.ENDC}")
+
+    try:
+        ASGClient.delete_launch_configuration(LaunchConfigurationName=ASGName)
+        time.sleep(5)
+        print(f"{bcolors.OKGREEN}Previous Launch Configuration removed{bcolors.ENDC}")
+    except:
+        print(f"{bcolors.FAIL}Launch Configuration deletion failed{bcolors.ENDC}")
+
+    ASGClient.create_auto_scaling_group(
+        AutoScalingGroupName=ASGName,
+        MinSize=1,
+        MaxSize=5,
+        DesiredCapacity=1,
+        InstanceId=instancesRegion1[0].id,
+        TargetGroupARNs=[targetGroupArn],
+    )
+
+    print(f"{bcolors.OKGREEN}AutoScaling Group created{bcolors.ENDC}")
