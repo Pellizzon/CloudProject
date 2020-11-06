@@ -213,6 +213,20 @@ if __name__ == "__main__":
         region_name=region1,
     )
 
+    lbClient = boto3.client(
+        "elbv2",
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+        region_name=region1,
+    )
+
+    ASGClient = boto3.client(
+        "autoscaling",
+        aws_access_key_id=os.getenv("ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("SECRET_KEY"),
+        region_name=region1,
+    )
+
     print(
         f"{bcolors.UNDERLINE}{bcolors.HEADER}Initiating N. Virginia setup{bcolors.ENDC}{bcolors.ENDC}"
     )
@@ -235,11 +249,59 @@ if __name__ == "__main__":
     except:
         print(f"\t{bcolors.FAIL}Key doesn't exist{bcolors.ENDC}")
 
+    # delete load balancer and wait
+    lb_name = "pell-lb"
+    try:
+        active_lbs = lbClient.describe_load_balancers()["LoadBalancers"]
+        for i in range(len(active_lbs)):
+            if active_lbs[i]["LoadBalancerName"] == lb_name:
+                my_lb_arn = active_lbs[i]["LoadBalancerArn"]
+                lbClient.delete_load_balancer(LoadBalancerArn=my_lb_arn)
+                print(f"\t{bcolors.OKGREEN}Delete Load Balancer{bcolors.ENDC}")
+                lbWaiter = lbClient.get_waiter("load_balancers_deleted")
+                print(
+                    f"\t\t{bcolors.OKCYAN}Waiting Load Balancer to terminate...{bcolors.ENDC}"
+                )
+                lbWaiter.wait(Names=[lb_name])
+                time.sleep(5)
+    except:
+        print(f"{bcolors.FAIL}Couldn't find load balancer{bcolors.ENDC}")
+
+    # try:
+    active_targetGroups = lbClient.describe_target_groups(Names=[lb_name])[
+        "TargetGroups"
+    ]
+    tgArn_toDelete = active_targetGroups[0]["TargetGroupArn"]
+    lbClient.delete_target_group(TargetGroupArn=tgArn_toDelete)
+    print(f"\t{bcolors.OKGREEN}Old TargetGroup removed{bcolors.ENDC}")
+    # except:
+    # print(f"\t{bcolors.FAIL}Old TargetGroup deletion error{bcolors.ENDC}")
+
     # delete existing instances
     try:
         terminate_instances(keyNameRegion1, ec2Region1)
     except:
         print(f"\t{bcolors.FAIL}Error deleting instances{bcolors.ENDC}")
+
+    ASGName = "AutoScalingORM"
+    try:
+        ASGClient.delete_auto_scaling_group(
+            AutoScalingGroupName=ASGName, ForceDelete=True
+        )
+        print(f"\t{bcolors.OKGREEN}AutoScaling Group is being deleted{bcolors.ENDC}")
+        print(f"\t\t{bcolors.OKCYAN}Waiting...{bcolors.ENDC}")
+        # there are no currently available ASG waiters. So in order to create an ASG with the same name,
+        # it is necessary to wait the deletion of the older one. Testing for a while, this should work for now.
+        time.sleep(80)
+    except:
+        print(f"\t{bcolors.FAIL}AutoScaling Group deletion failed{bcolors.ENDC}")
+
+    try:
+        ASGClient.delete_launch_configuration(LaunchConfigurationName=ASGName)
+        time.sleep(5)
+        print(f"\t{bcolors.OKGREEN}Previous Launch Configuration removed{bcolors.ENDC}")
+    except:
+        print(f"\t{bcolors.FAIL}Launch Configuration deletion failed{bcolors.ENDC}")
 
     # then delete security group (can only be done once all instances associated with it are terminated)
     try:
@@ -294,40 +356,12 @@ if __name__ == "__main__":
         f"{bcolors.UNDERLINE}{bcolors.HEADER}Finished initial setup. Starting AutoScaling Group and LoadBalancer{bcolors.ENDC}{bcolors.ENDC}"
     )
 
-    lbClient = boto3.client(
-        "elbv2",
-        aws_access_key_id=os.getenv("ACCESS_KEY"),
-        aws_secret_access_key=os.getenv("SECRET_KEY"),
-        region_name=region1,
-    )
-
     subnets = ec2ClientRegion1.describe_subnets()["Subnets"]
     default_subnets_IDs = []
-    # caso precise desse id... Todas as subnets possuem o vpc default
+
     vpcId = subnets[0]["VpcId"]
     for i in range(len(subnets)):
         default_subnets_IDs.append(subnets[i]["SubnetId"])
-
-    lb_name = "pell-lb"
-    try:
-        active_lbs = lbClient.describe_load_balancers()["LoadBalancers"]
-        for i in range(len(active_lbs)):
-            if active_lbs[i]["LoadBalancerName"] == lb_name:
-                my_lb_arn = active_lbs[i]["LoadBalancerArn"]
-                lbClient.delete_load_balancer(LoadBalancerArn=my_lb_arn)
-                lbWaiter = lbClient.get_waiter("load_balancers_deleted")
-                lbWaiter.wait(Names=[lb_name])
-    except:
-        print(f"{bcolors.FAIL}Couldn't find load balancer{bcolors.ENDC}")
-
-    try:
-        active_targetGroups = lbClient.describe_target_groups(Names=[lb_name])[
-            "TargetGroups"
-        ]
-        tgArn_toDelete = active_targetGroups[0]["TargetGroupArn"]
-        lbClient.delete_target_group(TargetGroupArn=tgArn_toDelete)
-    except:
-        print(f"{bcolors.FAIL}Deu ruim{bcolors.ENDC}")
 
     loadBalancer = lbClient.create_load_balancer(
         Name=lb_name,
@@ -335,11 +369,15 @@ if __name__ == "__main__":
         Tags=[{"Key": "name", "Value": "pell-lb"}],
     )
 
+    print(f"{bcolors.OKGREEN}LoadBalancer Group created{bcolors.ENDC}")
+
     lbArn = loadBalancer.get("LoadBalancers", [{}])[0].get("LoadBalancerArn", None)
 
     targetGroup = lbClient.create_target_group(
         Name=lb_name, Protocol="HTTP", Port=8080, VpcId=vpcId
     )
+
+    print(f"{bcolors.OKGREEN}TargetGroup created{bcolors.ENDC}")
 
     targetGroupArn = targetGroup.get("TargetGroups", [{}])[0].get(
         "TargetGroupArn", None
@@ -352,32 +390,7 @@ if __name__ == "__main__":
         Protocol="HTTP",
     )
 
-    ASGClient = boto3.client(
-        "autoscaling",
-        aws_access_key_id=os.getenv("ACCESS_KEY"),
-        aws_secret_access_key=os.getenv("SECRET_KEY"),
-        region_name=region1,
-    )
-
-    ASGName = "AutoScalingORM"
-
-    try:
-        ASGClient.delete_auto_scaling_group(
-            AutoScalingGroupName=ASGName, ForceDelete=True
-        )
-        print(f"{bcolors.OKGREEN}AutoScaling Group deleted{bcolors.ENDC}")
-        # there are no currently available ASG waiters. So in order to create an ASG with the same name,
-        # it is necessary to wait the deletion of the older one. Testing for a while, this should work for now.
-        time.sleep(120)
-    except:
-        print(f"{bcolors.FAIL}AutoScaling Group deletion failed{bcolors.ENDC}")
-
-    try:
-        ASGClient.delete_launch_configuration(LaunchConfigurationName=ASGName)
-        time.sleep(5)
-        print(f"{bcolors.OKGREEN}Previous Launch Configuration removed{bcolors.ENDC}")
-    except:
-        print(f"{bcolors.FAIL}Launch Configuration deletion failed{bcolors.ENDC}")
+    print(f"{bcolors.OKGREEN}LoadBalancer listener created{bcolors.ENDC}")
 
     ASGClient.create_auto_scaling_group(
         AutoScalingGroupName=ASGName,
