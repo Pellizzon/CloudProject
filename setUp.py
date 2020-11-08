@@ -28,6 +28,8 @@ def create_security_group(client, securityGroupName, permissions):
         IpPermissions=permissions,
     )
 
+    return security_group_id
+
 
 def create_instances(instance_params, amount, session, script):
     if script is not None:
@@ -267,15 +269,15 @@ if __name__ == "__main__":
     except:
         print(f"{bcolors.FAIL}Couldn't find load balancer{bcolors.ENDC}")
 
-    # try:
-    active_targetGroups = lbClient.describe_target_groups(Names=[lb_name])[
-        "TargetGroups"
-    ]
-    tgArn_toDelete = active_targetGroups[0]["TargetGroupArn"]
-    lbClient.delete_target_group(TargetGroupArn=tgArn_toDelete)
-    print(f"\t{bcolors.OKGREEN}Old TargetGroup removed{bcolors.ENDC}")
-    # except:
-    # print(f"\t{bcolors.FAIL}Old TargetGroup deletion error{bcolors.ENDC}")
+    try:
+        active_targetGroups = lbClient.describe_target_groups(Names=[lb_name])[
+            "TargetGroups"
+        ]
+        tgArn_toDelete = active_targetGroups[0]["TargetGroupArn"]
+        lbClient.delete_target_group(TargetGroupArn=tgArn_toDelete)
+        print(f"\t{bcolors.OKGREEN}Old TargetGroup removed{bcolors.ENDC}")
+    except:
+        print(f"\t{bcolors.FAIL}Old TargetGroup deletion error{bcolors.ENDC}")
 
     # delete existing instances
     try:
@@ -325,7 +327,9 @@ if __name__ == "__main__":
                 "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
             },
         ]
-        create_security_group(ec2ClientRegion1, appSecurityGroupName, appPermissions)
+        appSG_Id = create_security_group(
+            ec2ClientRegion1, appSecurityGroupName, appPermissions
+        )
     except:
         print(f"\t{bcolors.FAIL}Security Group already exists{bcolors.ENDC}")
 
@@ -366,7 +370,10 @@ if __name__ == "__main__":
     loadBalancer = lbClient.create_load_balancer(
         Name=lb_name,
         Subnets=default_subnets_IDs,
-        Tags=[{"Key": "name", "Value": "pell-lb"}],
+        Scheme="internet-facing",
+        Type="application",
+        SecurityGroups=[appSG_Id],
+        Tags=[{"Key": "name", "Value": f"{lb_name}"}],
     )
 
     print(f"{bcolors.OKGREEN}LoadBalancer Group created{bcolors.ENDC}")
@@ -399,6 +406,7 @@ if __name__ == "__main__":
         DesiredCapacity=1,
         InstanceId=instancesRegion1[0].id,
         TargetGroupARNs=[targetGroupArn],
+        # VPCZoneIdentifier=f"{default_subnets_IDs[0]}, {default_subnets_IDs[1]}, {default_subnets_IDs[2]}, {default_subnets_IDs[3]}, {default_subnets_IDs[4]}, {default_subnets_IDs[5]}",
     )
 
     print(f"{bcolors.OKGREEN}AutoScaling Group created{bcolors.ENDC}")
