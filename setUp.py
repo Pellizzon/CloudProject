@@ -376,7 +376,7 @@ if __name__ == "__main__":
         Tags=[{"Key": "name", "Value": f"{lb_name}"}],
     )
 
-    print(f"{bcolors.OKGREEN}LoadBalancer Group created{bcolors.ENDC}")
+    print(f"\t{bcolors.OKGREEN}LoadBalancer Group created{bcolors.ENDC}")
 
     lbArn = loadBalancer.get("LoadBalancers", [{}])[0].get("LoadBalancerArn", None)
 
@@ -384,7 +384,7 @@ if __name__ == "__main__":
         Name=lb_name, Protocol="HTTP", Port=8080, VpcId=vpcId
     )
 
-    print(f"{bcolors.OKGREEN}TargetGroup created{bcolors.ENDC}")
+    print(f"\t{bcolors.OKGREEN}TargetGroup created{bcolors.ENDC}")
 
     targetGroupArn = targetGroup.get("TargetGroups", [{}])[0].get(
         "TargetGroupArn", None
@@ -397,7 +397,7 @@ if __name__ == "__main__":
         Protocol="HTTP",
     )
 
-    print(f"{bcolors.OKGREEN}LoadBalancer listener created{bcolors.ENDC}")
+    print(f"\t{bcolors.OKGREEN}LoadBalancer listener created{bcolors.ENDC}")
 
     ASGClient.create_auto_scaling_group(
         AutoScalingGroupName=ASGName,
@@ -406,7 +406,20 @@ if __name__ == "__main__":
         DesiredCapacity=1,
         InstanceId=instancesRegion1[0].id,
         TargetGroupARNs=[targetGroupArn],
-        # VPCZoneIdentifier=f"{default_subnets_IDs[0]}, {default_subnets_IDs[1]}, {default_subnets_IDs[2]}, {default_subnets_IDs[3]}, {default_subnets_IDs[4]}, {default_subnets_IDs[5]}",
     )
 
-    print(f"{bcolors.OKGREEN}AutoScaling Group created{bcolors.ENDC}")
+    print(f"\t{bcolors.OKGREEN}AutoScaling Group created{bcolors.ENDC}")
+
+    print(
+        f"\t{bcolors.OKGREEN}Terminating instance {instancesRegion1[0].id}{bcolors.ENDC}"
+    )
+    ec2Region1.Instance(instancesRegion1[0].id).terminate()
+    print(
+        f"\t\t{bcolors.OKCYAN}Waiting instance {instancesRegion1[0].id} to terminate...{bcolors.ENDC}"
+    )
+    ec2Region1.Instance(instancesRegion1[0].id).wait_until_terminated()
+
+    lbDNS = loadBalancer.get("LoadBalancers", [{}])[0].get("DNSName", None)
+    print(
+        f"{bcolors.WARNING}LoadBalancer can be accessed on: {lbDNS}:8080/{bcolors.ENDC}"
+    )
