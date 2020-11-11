@@ -423,3 +423,13 @@ if __name__ == "__main__":
     print(
         f"{bcolors.WARNING}LoadBalancer can be accessed on: {lbDNS}:8080/{bcolors.ENDC}"
     )
+
+    with open("cli.py", "r") as file:
+        code = file.readlines()
+
+    code[7] = f'BASE_URL = "http://{lbDNS}:8080/tasks"\n'
+
+    print(code[7])
+
+    with open("cli.py", "w") as file:
+        file.writelines(code)

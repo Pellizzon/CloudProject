@@ -5,7 +5,7 @@ import requests
 import json
 import datetime
 
-BASE_URL = "http://pell-lb-1221302987.us-east-1.elb.amazonaws.com:8080/tasks"
+BASE_URL = "http://pell-lb-1336367152.us-east-1.elb.amazonaws.com:8080/tasks"
 
 
 @click.group()
