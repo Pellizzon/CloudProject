@@ -3,15 +3,15 @@ import requests
 import json
 import datetime
 
-BASE_URL = "http://pell-lb-30763450.us-east-1.elb.amazonaws.com:8080/tasks"
+BASE_URL = "http://localhost:8080/tasks"
 
 
 @click.group()
-def pellizzon_cli():
+def pellizzon():
     """A CLI wrapper for the API of Public APIs."""
 
 
-@pellizzon_cli.command()
+@pellizzon.command()
 def tasks():
     """List all tasks."""
     response = requests.get(url=f"{BASE_URL}/list")
@@ -26,7 +26,7 @@ def tasks():
     "--id_task",
     help="Title of the task",
 )
-@pellizzon_cli.command()
+@pellizzon.command()
 def get(id_task: str):
     """Get task specified by id."""
     response = requests.get(url=f"{BASE_URL}/{id_task}")
@@ -42,7 +42,7 @@ def get(id_task: str):
     help="Title of the task",
 )
 @click.option("-d", "--description", help="Task description")
-@pellizzon_cli.command()
+@pellizzon.command()
 def create(title: str, description: str):
     """Create new task."""
     pub_date = str(datetime.datetime.now())
@@ -65,7 +65,7 @@ def create(title: str, description: str):
     help="New title of the task",
 )
 @click.option("-d", "--new_description", help="Task description")
-@pellizzon_cli.command()
+@pellizzon.command()
 def update(id_task: str, new_title: str, new_description: str):
     """update task of given id."""
     new_pub_date = str(datetime.datetime.now())
@@ -88,7 +88,7 @@ def update(id_task: str, new_title: str, new_description: str):
     help="ID of the task to be deleted",
 )
 @click.option("-a", "--delete_all", is_flag=True, help="Delete all tasks.")
-@pellizzon_cli.command()
+@pellizzon.command()
 def delete(id_task: str, delete_all: bool):
     """delete task of given id or delete all tasks"""
     if id_task:
@@ -104,4 +104,4 @@ def delete(id_task: str, delete_all: bool):
 
 
 if __name__ == "__main__":
-    pellizzon_cli(prog_name="pellizzon_cli")
+    pellizzon(prog_name="pellizzon")
