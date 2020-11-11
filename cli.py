@@ -8,7 +8,7 @@ BASE_URL = "http://localhost:8080/tasks"
 
 @click.group()
 def pellizzon():
-    """A CLI wrapper for the API of Public APIs."""
+    """A CLI wrapper for Cloud Project."""
 
 
 @pellizzon.command()
