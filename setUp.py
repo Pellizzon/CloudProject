@@ -16,9 +16,9 @@ class bcolors:
     UNDERLINE = "\033[4m"
 
 
-def create_security_group(client, securityGroupName, permissions):
+def create_security_group(client, securityGroupName, permissions, description):
     response = client.create_security_group(
-        GroupName=securityGroupName, Description="Teste"
+        GroupName=securityGroupName, Description=description
     )
 
     security_group_id = response["GroupId"]
@@ -84,10 +84,10 @@ if __name__ == "__main__":
         amazon's us-east-2 region
     """
 
-    keyNameRegion2 = "teste2"
+    keyNameRegion2 = "pellizzonOhio"
     region2 = "us-east-2"
     ImageIdRegion2 = "ami-07efac79022b86107"
-    databaseSecurityGroupName = "databaseGroup"
+    databaseSecurityGroupName = "pellizzonDatabaseSecurityGroup"
 
     session_region2 = boto3.Session(
         aws_access_key_id=os.getenv("ACCESS_KEY"),
@@ -154,7 +154,10 @@ if __name__ == "__main__":
             },
         ]
         create_security_group(
-            ec2ClientRegion2, databaseSecurityGroupName, db_permissions
+            ec2ClientRegion2,
+            databaseSecurityGroupName,
+            db_permissions,
+            "databseSG Pellizzon",
         )
     except:
         print(
@@ -196,9 +199,9 @@ if __name__ == "__main__":
         amazon's us-east-1 region
     """
 
-    appSecurityGroupName = "grupoTeste"
+    appSecurityGroupName = "pellizzonAppSecurityGroup"
     region1 = "us-east-1"
-    keyNameRegion1 = "teste"
+    keyNameRegion1 = "pellizzonNVirginia"
     ImageIdRegion1 = "ami-0dba2cb6798deb6d8"
 
     sessionRegion1 = boto3.Session(
@@ -252,7 +255,7 @@ if __name__ == "__main__":
         print(f"\t{bcolors.FAIL}Key doesn't exist{bcolors.ENDC}")
 
     # delete load balancer and wait
-    lb_name = "pell-lb"
+    lb_name = "pellizzonLb"
     try:
         active_lbs = lbClient.describe_load_balancers()["LoadBalancers"]
         for i in range(len(active_lbs)):
@@ -285,7 +288,7 @@ if __name__ == "__main__":
     except:
         print(f"\t{bcolors.FAIL}Error deleting instances{bcolors.ENDC}")
 
-    ASGName = "AutoScalingORM"
+    ASGName = "PellizzonAutoScalingORM"
     try:
         ASGClient.delete_auto_scaling_group(
             AutoScalingGroupName=ASGName, ForceDelete=True
@@ -328,7 +331,10 @@ if __name__ == "__main__":
             },
         ]
         appSG_Id = create_security_group(
-            ec2ClientRegion1, appSecurityGroupName, appPermissions
+            ec2ClientRegion1,
+            appSecurityGroupName,
+            appPermissions,
+            "SG App Pellizzon",
         )
     except:
         print(f"\t{bcolors.FAIL}Security Group already exists{bcolors.ENDC}")
@@ -421,15 +427,13 @@ if __name__ == "__main__":
 
     lbDNS = loadBalancer.get("LoadBalancers", [{}])[0].get("DNSName", None)
     print(
-        f"{bcolors.WARNING}LoadBalancer can be accessed on: {lbDNS}:8080/{bcolors.ENDC}"
+        f"{bcolors.WARNING}LoadBalancer can be accessed on: http://{lbDNS}:8080/{bcolors.ENDC}"
     )
 
     with open("cli.py", "r") as file:
         code = file.readlines()
 
     code[7] = f'BASE_URL = "http://{lbDNS}:8080/tasks"\n'
-
-    print(code[7])
 
     with open("cli.py", "w") as file:
         file.writelines(code)
