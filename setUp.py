@@ -181,6 +181,12 @@ if __name__ == "__main__":
         "InstanceType": InstanceType,
         "KeyName": keyNameRegion2,
         "SecurityGroups": [databaseSecurityGroupName],
+        "TagSpecifications": [
+            {
+                "ResourceType": "instance",
+                "Tags": [{"Key": "Name", "Value": "PellizzonDB"}],
+            }
+        ],
     }
     # create instances
     instancesRegion2 = create_instances(
@@ -344,6 +350,12 @@ if __name__ == "__main__":
         "InstanceType": InstanceType,
         "KeyName": keyNameRegion1,
         "SecurityGroups": [appSecurityGroupName],
+        "TagSpecifications": [
+            {
+                "ResourceType": "instance",
+                "Tags": [{"Key": "Name", "Value": "PellizzonAMIExample"}],
+            }
+        ],
     }
 
     scriptAppSetup = f"""#!/bin/bash
