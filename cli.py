@@ -1,14 +1,24 @@
+#!/usr/bin/env python3
+
 import click
 import requests
 import json
 import datetime
 
-BASE_URL = "http://localhost:8080/tasks"
+BASE_URL = "http://pell-lb-1221302987.us-east-1.elb.amazonaws.com:8080/tasks"
 
 
 @click.group()
 def pellizzon():
-    """A CLI wrapper for Cloud Project."""
+    """A CLI wrapper for Cloud Project.
+
+    run chmod 755 cli.py && ./cli.py --help
+
+    or
+
+    python3 cli.py --help
+
+    """
 
 
 @pellizzon.command()
@@ -18,7 +28,7 @@ def tasks():
     if response.status_code == 200:
         print(json.dumps(response.json(), indent=4, sort_keys=True))
     else:
-        print(f"Could not get the APIs: {response.text}")
+        print(f"Could not get the tasks: {response.text}")
 
 
 @click.option(
