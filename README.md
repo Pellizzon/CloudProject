@@ -11,4 +11,4 @@
 - ```./pellizzon --help```
 
 Packages needed to run this project:
-- ```pip3 install -U click requirements python-dotenv boto3```
+- ```pip3 install -U click requests python-dotenv boto3```
