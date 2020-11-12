@@ -274,7 +274,6 @@ if __name__ == "__main__":
                     f"\t\t{bcolors.OKCYAN}Waiting Load Balancer to terminate...{bcolors.ENDC}"
                 )
                 lbWaiter.wait(Names=[lb_name])
-                time.sleep(5)
     except:
         print(f"{bcolors.FAIL}Couldn't find load balancer{bcolors.ENDC}")
 
@@ -394,7 +393,7 @@ if __name__ == "__main__":
         Tags=[{"Key": "name", "Value": f"{lb_name}"}],
     )
 
-    print(f"\t{bcolors.OKGREEN}LoadBalancer Group created{bcolors.ENDC}")
+    print(f"\t{bcolors.OKGREEN}LoadBalancer created{bcolors.ENDC}")
 
     lbArn = loadBalancer.get("LoadBalancers", [{}])[0].get("LoadBalancerArn", None)
 
@@ -426,7 +425,23 @@ if __name__ == "__main__":
         TargetGroupARNs=[targetGroupArn],
     )
 
+    p = targetGroupArn.find("targetgroup")
+    m = lbArn.find("app")
+
     print(f"\t{bcolors.OKGREEN}AutoScaling Group created{bcolors.ENDC}")
+
+    ASGClient.put_scaling_policy(
+        AutoScalingGroupName=ASGName,
+        PolicyName="PellizzonAutomaticScaling",
+        PolicyType="TargetTrackingScaling",
+        TargetTrackingConfiguration={
+            "PredefinedMetricSpecification": {
+                "PredefinedMetricType": "ALBRequestCountPerTarget",
+                "ResourceLabel": lbArn[m:] + "/" + targetGroupArn[p:],
+            },
+            "TargetValue": 1000,
+        },
+    )
 
     print(
         f"\t{bcolors.OKGREEN}Terminating instance {instancesRegion1[0].id}{bcolors.ENDC}"
@@ -442,10 +457,10 @@ if __name__ == "__main__":
         f"{bcolors.WARNING}LoadBalancer can be accessed on: http://{lbDNS}:8080/{bcolors.ENDC}"
     )
 
-    with open("cli.py", "r") as file:
+    with open("pellizzon", "r") as file:
         code = file.readlines()
 
     code[7] = f'BASE_URL = "http://{lbDNS}:8080/tasks"\n'
 
-    with open("cli.py", "w") as file:
+    with open("pellizzon", "w") as file:
         file.writelines(code)
