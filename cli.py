@@ -10,15 +10,7 @@ BASE_URL = "http://pellizzonLb-1944810896.us-east-1.elb.amazonaws.com:8080/tasks
 
 @click.group()
 def pellizzon():
-    """A CLI wrapper for Cloud Project.
-
-    run chmod 755 cli.py && ./cli.py --help
-
-    or
-
-    python3 cli.py --help
-
-    """
+    """A CLI wrapper for Cloud Project"""
 
 
 @pellizzon.command()
