@@ -2,6 +2,7 @@ import boto3
 from dotenv import load_dotenv
 import os
 import time
+from botocore.exceptions import ClientError
 
 # https://stackoverflow.com/questions/287871/how-to-print-colored-text-in-python
 class bcolors:
@@ -111,8 +112,8 @@ if __name__ == "__main__":
     try:
         ec2ClientRegion2.delete_key_pair(KeyName=keyNameRegion2)
         print(f"\t{bcolors.OKBLUE}Key Pair deleted{bcolors.ENDC}")
-    except:
-        print(f"\t{bcolors.FAIL}Key already exists{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # create keypair
     try:
@@ -122,20 +123,20 @@ if __name__ == "__main__":
         print(
             f"\t{bcolors.OKBLUE}Key Pair created and written in {keyNameRegion2}.pem file{bcolors.ENDC}"
         )
-    except:
-        print(f"\t{bcolors.FAIL}Key doesn't exist{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # delete existing instances
     try:
         terminate_instances(keyNameRegion2, ec2Region2)
-    except:
-        print(f"\t{bcolors.FAIL}Error deleting instances{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # then delete security group (can only be done once all instances associated with it are terminated)
     try:
         ec2ClientRegion2.delete_security_group(GroupName=databaseSecurityGroupName)
-    except:
-        print(f"\t{bcolors.FAIL}Security Group deletion error{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # create security group to add to instances
     try:
@@ -159,10 +160,8 @@ if __name__ == "__main__":
             db_permissions,
             "databseSG Pellizzon",
         )
-    except:
-        print(
-            f"\t{bcolors.FAIL}Security Group already exists or another error might have happened{bcolors.ENDC}"
-        )
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     scriptDb = """#!/bin/bash
     sudo apt update
@@ -246,8 +245,8 @@ if __name__ == "__main__":
     try:
         ec2ClientRegion1.delete_key_pair(KeyName=keyNameRegion1)
         print(f"\t{bcolors.OKBLUE}Key Pair deleted{bcolors.ENDC}")
-    except:
-        print(f"\t{bcolors.FAIL}Key already exists{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # create keypair
     try:
@@ -257,8 +256,8 @@ if __name__ == "__main__":
         print(
             f"\t{bcolors.OKBLUE}Key Pair created and written in {keyNameRegion1}.pem file{bcolors.ENDC}"
         )
-    except:
-        print(f"\t{bcolors.FAIL}Key doesn't exist{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # delete load balancer and wait
     lb_name = "pellizzonLb"
@@ -274,8 +273,9 @@ if __name__ == "__main__":
                     f"\t\t{bcolors.OKCYAN}Waiting Load Balancer to terminate...{bcolors.ENDC}"
                 )
                 lbWaiter.wait(Names=[lb_name])
-    except:
-        print(f"{bcolors.FAIL}Couldn't find load balancer{bcolors.ENDC}")
+        time.sleep(5)
+    except ClientError as e:
+        print(f"{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     try:
         active_targetGroups = lbClient.describe_target_groups(Names=[lb_name])[
@@ -284,14 +284,14 @@ if __name__ == "__main__":
         tgArn_toDelete = active_targetGroups[0]["TargetGroupArn"]
         lbClient.delete_target_group(TargetGroupArn=tgArn_toDelete)
         print(f"\t{bcolors.OKGREEN}Old TargetGroup removed{bcolors.ENDC}")
-    except:
-        print(f"\t{bcolors.FAIL}Old TargetGroup deletion error{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # delete existing instances
     try:
         terminate_instances(keyNameRegion1, ec2Region1)
-    except:
-        print(f"\t{bcolors.FAIL}Error deleting instances{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     ASGName = "PellizzonAutoScalingORM"
     try:
@@ -303,21 +303,21 @@ if __name__ == "__main__":
         # there are no currently available ASG waiters. So in order to create an ASG with the same name,
         # it is necessary to wait the deletion of the older one. Testing for a while, this should work for now.
         time.sleep(80)
-    except:
-        print(f"\t{bcolors.FAIL}AutoScaling Group deletion failed{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     try:
         ASGClient.delete_launch_configuration(LaunchConfigurationName=ASGName)
         time.sleep(5)
         print(f"\t{bcolors.OKGREEN}Previous Launch Configuration removed{bcolors.ENDC}")
-    except:
-        print(f"\t{bcolors.FAIL}Launch Configuration deletion failed{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # then delete security group (can only be done once all instances associated with it are terminated)
     try:
         ec2ClientRegion1.delete_security_group(GroupName=appSecurityGroupName)
-    except:
-        print(f"\t{bcolors.FAIL}Security Group deletion error{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     # create security group to add to instances
     try:
@@ -341,8 +341,8 @@ if __name__ == "__main__":
             appPermissions,
             "SG App Pellizzon",
         )
-    except:
-        print(f"\t{bcolors.FAIL}Security Group already exists{bcolors.ENDC}")
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
     appParams = {
         "ImageId": ImageIdRegion1,
@@ -395,7 +395,7 @@ if __name__ == "__main__":
 
     print(f"\t{bcolors.OKGREEN}LoadBalancer created{bcolors.ENDC}")
 
-    lbArn = loadBalancer.get("LoadBalancers", [{}])[0].get("LoadBalancerArn", None)
+    lbArn = loadBalancer["LoadBalancers"][0]["LoadBalancerArn"]
 
     targetGroup = lbClient.create_target_group(
         Name=lb_name, Protocol="HTTP", Port=8080, VpcId=vpcId
@@ -403,9 +403,7 @@ if __name__ == "__main__":
 
     print(f"\t{bcolors.OKGREEN}TargetGroup created{bcolors.ENDC}")
 
-    targetGroupArn = targetGroup.get("TargetGroups", [{}])[0].get(
-        "TargetGroupArn", None
-    )
+    targetGroupArn = targetGroup["TargetGroups"][0]["TargetGroupArn"]
 
     listener = lbClient.create_listener(
         DefaultActions=[{"TargetGroupArn": targetGroupArn, "Type": "forward"}],
@@ -452,7 +450,7 @@ if __name__ == "__main__":
     )
     ec2Region1.Instance(instancesRegion1[0].id).wait_until_terminated()
 
-    lbDNS = loadBalancer.get("LoadBalancers", [{}])[0].get("DNSName", None)
+    lbDNS = loadBalancer["LoadBalancers"][0]["DNSName"]
     print(
         f"{bcolors.WARNING}LoadBalancer can be accessed on: http://{lbDNS}:8080/{bcolors.ENDC}"
     )
