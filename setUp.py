@@ -273,7 +273,7 @@ if __name__ == "__main__":
                     f"\t\t{bcolors.OKCYAN}Waiting Load Balancer to terminate...{bcolors.ENDC}"
                 )
                 lbWaiter.wait(Names=[lb_name])
-        time.sleep(5)
+        time.sleep(15)
     except ClientError as e:
         print(f"{bcolors.FAIL}{e}{bcolors.ENDC}")
 
