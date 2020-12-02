@@ -287,12 +287,6 @@ if __name__ == "__main__":
     except ClientError as e:
         print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
-    # delete existing instances
-    try:
-        terminate_instances(keyNameRegion1, ec2Region1)
-    except ClientError as e:
-        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
-
     ASGName = "PellizzonAutoScalingORM"
     try:
         ASGClient.delete_auto_scaling_group(
@@ -303,6 +297,12 @@ if __name__ == "__main__":
         # there are no currently available ASG waiters. So in order to create an ASG with the same name,
         # it is necessary to wait the deletion of the older one. Testing for a while, this should work for now.
         time.sleep(80)
+    except ClientError as e:
+        print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
+
+    # delete existing instances
+    try:
+        terminate_instances(keyNameRegion1, ec2Region1)
     except ClientError as e:
         print(f"\t{bcolors.FAIL}{e}{bcolors.ENDC}")
 
